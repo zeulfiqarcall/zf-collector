@@ -1,10 +1,17 @@
 {
-  "block": [],
+  "block": [
+    "مشاهد",
+    "واتساب",
+    "تابعونا",
+    "اشتركو",
+    "شاركو"
+  ],
   "channels": [
     "Alfaqaar313",
     "naya_foriraq",
     "Alibk3",
-    "SabrenNewss"
+    "SabrenNewss",
+    "Alomhoar"
   ],
   "footer": "https:\/\/t.me\/zeulfiqar",
   "links": true,
@@ -13,8 +20,20 @@
   "rbChat": "@zeulfiqar",
   "rbFooter": "https:\/\/rubika.ir\/zeulfiqar",
   "rbTranslate": true,
-  "remove": [],
-  "replace": [],
+  "remove": [
+    "لنايا",
+    "نايا",
+    "صابرين",
+    "لصابرين نيوز",
+    "صابرين نيوز",
+    "المحورنيوز",
+    "محورنيوز",
+    "الفقار",
+    "للفقار"
+  ],
+  "replace": [
+    "الخليج العربي => الخليج الفارسي"
+  ],
   "rubika": true,
   "shirk": true,
   "tgChat": "@zeulfiqar",
