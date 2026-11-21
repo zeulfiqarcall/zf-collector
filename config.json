@@ -1,17 +1,22 @@
 {
   "block": [],
-  "channels": [],
-  "footer": "",
+  "channels": [
+    "Alfaqaar313",
+    "naya_foriraq",
+    "Alibk3",
+    "SabrenNewss"
+  ],
+  "footer": "https:\/\/t.me\/zeulfiqar",
   "links": true,
-  "noEmoji": false,
+  "noEmoji": true,
   "paused": false,
-  "rbChat": "",
-  "rbFooter": "",
+  "rbChat": "@zeulfiqar",
+  "rbFooter": "https:\/\/rubika.ir\/zeulfiqar",
   "rbTranslate": true,
   "remove": [],
   "replace": [],
-  "rubika": false,
+  "rubika": true,
   "shirk": true,
-  "tgChat": "",
+  "tgChat": "@zeulfiqar",
   "tzOffset": 3
 }
