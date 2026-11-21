@@ -1,0 +1,36 @@
+name: ZF Collector
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - config.json
+concurrency:
+  group: zf-collector
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run collector
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          RB_TOKEN: ${{ secrets.RB_TOKEN }}
+        run: python3 zf_server.py
+      - name: Save state
+        run: |
+          git config user.name "zf-bot"
+          git config user.email "zf-bot@users.noreply.github.com"
+          git add state.json status.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "state [skip ci]"
+          for i in 1 2 3; do
+            git pull --rebase -q && git push -q && exit 0
+            sleep 3
+          done
+          exit 1
