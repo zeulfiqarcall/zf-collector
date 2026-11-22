@@ -19,7 +19,21 @@ L = r"[^\W\d_]"  # حرف (يعوض \p{L})
 DIAC = r"[\u064B-\u065F\u0670\u0640]*"
 
 POST_ID = re.compile(r'data-post="[^"/]+/(\d+)"')
-POST_TEXT = re.compile(r'<div class="tgme_widget_message_text js-message_text"[^>]*>(.*?)</div>', re.S)
+TEXT_OPEN = re.compile(r'<div class="tgme_widget_message_text js-message_text(?: [^"]*)?"[^>]*>')
+T0 = time.time()
+BUDGET = 330          # ثواني: بعدها نوقف ونحفظ (الباقي بالفحص الجاي)
+
+
+def extract_text(block):
+    m = TEXT_OPEN.search(block)
+    if not m:
+        return ""
+    i, depth = m.end(), 1
+    for t in re.finditer(r"<div\b|</div>", block[i:]):
+        depth += -1 if t.group() == "</div>" else 1
+        if depth == 0:
+            return block[i:i + t.start()]
+    return block[i:]
 LINKS = re.compile(r"https?://\S+|t\.me/\S+|www\.\S+|@\w+")
 EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2300-\u23FF\u2B00-\u2BFF\u2934\u2935\u25AA\u25AB\u25B6\u25C0"
                    "\u25FB-\u25FE\u2139\u24C2\u203C\u2049\u3030\u303D\u3297\u3299\uFE0E\uFE0F\u20E3\U000E0020-\U000E007F]")
@@ -110,9 +124,9 @@ def filter_text(cfg, raw):
     t = raw.replace("\u00a0", " ").strip()
     if not t:
         return None
-    low = t.lower()
+    low = norm_ar(t).lower()
     for w in lines(cfg.get("block")):
-        if w.lower() in low:
+        if norm_ar(w).lower() in low:
             return None
     if cfg.get("shirk", True):
         t = RM_MADAD.sub(" ", t)
@@ -248,6 +262,60 @@ class Ctx:
         self.tg, self.rb = tg_token, rb_token
         self.last_tg = 0.0
         self.rb_err = None
+        self.notext = 0
+        self.cut = False
+
+
+def rb_deliver(cx, out):
+    cfg = cx.cfg
+    rb_chat = str(cfg.get("rbChat", "")).strip()
+    if not cx.rb or not rb_chat:
+        raise Exception("عبّي توكن وقناة روبيكا")
+    rb_out = translate_fa(out) if cfg.get("rbTranslate", True) else out
+    if len(rb_out) > 3800:
+        rb_out = rb_out[:3800] + "…"
+    rb_foot = str(cfg.get("rbFooter", "")).strip()
+    qf, ql = -1, 0
+    if is_long(rb_out):
+        msg = rb_out + "\n\n" + rb_foot if rb_foot else rb_out
+        qf, ql = 0, len(rb_out)
+    elif rb_foot:
+        msg = rb_out + "\n\n" + rb_foot
+        qf, ql = len(rb_out) + 2, len(rb_foot)
+    else:
+        msg = rb_out
+    rb_send(cx.rb, rb_chat, msg, qf, ql)
+
+
+def rb_try(cx, out):
+    try:
+        rb_deliver(cx, out)
+        return True
+    except Exception as e:
+        m = str(e).replace(cx.rb or "\0", "***")
+        if "INVALID_ACCESS" in m:
+            m = "INVALID_ACCESS (تأكد من RB_TOKEN ومعرّف القناة وان البوت ادمن)"
+        cx.rb_err = "روبيكا: " + m
+        return False
+
+
+def retry_rb(cx):
+    """يعيد ارسال رسائل روبيكا الفاشلة (اقصى 12 محاولة للرسالة)."""
+    q = cx.state.setdefault("rb_pending", [])
+    if not cx.cfg.get("rubika", False):
+        del q[:]
+        return 0
+    done = 0
+    for item in list(q):
+        if rb_try(cx, item["t"]):
+            q.remove(item)
+            done += 1
+        else:
+            item["n"] = item.get("n", 0) + 1
+            if item["n"] >= 12:
+                q.remove(item)
+            break           # غالبا مشكلة عامة: نجرب بالفحص الجاي
+    return done
 
 
 def post_one(cx, out):
@@ -268,27 +336,10 @@ def post_one(cx, out):
     except ParseFail:
         tg_send(cx.tg, chat, plain, False)
     cx.last_tg = time.time()
-    if cfg.get("rubika", False):
-        try:
-            rb_chat = str(cfg.get("rbChat", "")).strip()
-            if not cx.rb or not rb_chat:
-                raise Exception("عبّي توكن وقناة روبيكا")
-            rb_out = translate_fa(out) if cfg.get("rbTranslate", True) else out
-            if len(rb_out) > 3800:
-                rb_out = rb_out[:3800] + "…"
-            rb_foot = str(cfg.get("rbFooter", "")).strip()
-            qf, ql = -1, 0
-            if is_long(rb_out):
-                msg = rb_out + "\n\n" + rb_foot if rb_foot else rb_out
-                qf, ql = 0, len(rb_out)
-            elif rb_foot:
-                msg = rb_out + "\n\n" + rb_foot
-                qf, ql = len(rb_out) + 2, len(rb_foot)
-            else:
-                msg = rb_out
-            rb_send(cx.rb, rb_chat, msg, qf, ql)
-        except Exception as e:
-            cx.rb_err = "روبيكا: " + str(e).replace(cx.rb or "\0", "***")
+    if cfg.get("rubika", False) and not rb_try(cx, out):
+        q = cx.state.setdefault("rb_pending", [])
+        q.append({"t": out, "n": 0})
+        del q[:-30]
 
 
 def parse_posts(page):
@@ -316,15 +367,19 @@ def poll_channel(cx, ch, paused):
         return 0, 0
     sent = skipped = handled = 0
     sent_hashes = cx.state.setdefault("sent", [])
+    new = [i for i in ids if i > last]
     for n, pid in enumerate(ids):
         if pid <= last:
             continue
         if handled >= MAX_PER_CHANNEL:
             break
+        if time.time() - T0 > BUDGET:
+            cx.cut = True
+            break
         end = starts[n + 1] if n + 1 < len(starts) else len(page)
-        block = page[starts[n]:end]
-        m = POST_TEXT.search(block)
-        text = html_to_text(m.group(1)) if m else ""
+        text = html_to_text(extract_text(page[starts[n]:end])).strip()
+        if not text:
+            cx.notext += 1
         out = filter_text(cx.cfg, text)
         if out is not None and norm_hash(out) not in sent_hashes:
             post_one(cx, out)
@@ -335,6 +390,7 @@ def poll_channel(cx, ch, paused):
             skipped += 1
         last_map[key] = pid
         handled += 1
+    print("@%s: منشورات=%d آخر_محفوظ=%s جديد=%d أُرسل=%d تخطّى=%d" % (ch, len(ids), last, len(new), sent, skipped))
     return sent, skipped
 
 
@@ -383,15 +439,28 @@ def main():
         cx = Ctx(cfg, state, tg, rb)
         sent = skipped = 0
         err = ""
+        retried = retry_rb(cx)
         for ch in channels:
+            if time.time() - T0 > BUDGET:
+                cx.cut = True
+                break
             try:
                 s, k = poll_channel(cx, ch, paused)
                 sent += s
                 skipped += k
             except Exception as e:
+                msg = "@%s: %s" % (ch, str(e).replace(tg, "***"))
+                print("خطأ " + msg)
                 if not err:
-                    err = "@%s: %s" % (ch, str(e).replace(tg, "***"))
+                    err = msg
+            save_json(STATE_FILE, state)
         status = ("متوقف مؤقتا • " if paused else "") + "أُرسل %d • تخطّى %d" % (sent, skipped)
+        if cx.notext:
+            status += " (منها %d بلا نص)" % cx.notext
+        if cx.cut:
+            status += " • انتهى الوقت وكمّل بالفحص الجاي"
+        if retried:
+            status += " • روبيكا أُعيد %d" % retried
         if err:
             status += " • خطأ " + err
         if cx.rb_err:
@@ -402,7 +471,7 @@ def main():
     save_json(STATE_FILE, state)
     # status.json: نكتبه فقط اذا صار شي، او مرّت ساعة (عشان ما نملأ الريبو بكوميتات)
     old = load_json(STATUS_FILE, {})
-    changed = sent or skipped or "خطأ" in status
+    changed = sent or skipped or "خطأ" in status or "روبيكا" in status
     if changed or time.time() - float(old.get("ts", 0)) > 3600:
         save_json(STATUS_FILE, {"text": status, "ts": int(time.time())})
 
