@@ -2,6 +2,7 @@
 """تصميم صورة الخبر (نسخة بايثون من ZFImage.java): خلفية حمراء متدرجة + دائرة خفيفة،
 عنوان «فوری» بخط Black، والنص تحته بخط Semibold مضبوط بالكشيدة على 3 الى 5 اسطر.
 يحتاج Pillow مع raqm (تشكيل الحروف العربية)."""
+import importlib
 import io
 import os
 import re
@@ -24,30 +25,50 @@ FONT_SEMI = os.path.join(HERE, "sf_arabic_semibold.ttf")
 _PIL = {}
 
 
-def ensure_deps():
-    """يتأكد ان Pillow موجود ومعه raqm؛ لو لا يثبّته (على سيرفر GitHub). يرمي استثناء لو فشل."""
+def install_deps():
+    """يثبّت Pillow + libraqm لو ناقصين (على سيرفر GitHub). ما يستورد Pillow بنفس العملية.
+    يرمي استثناء لو فشل. السيرفر يعيد تشغيل نفسه بعدها (execv) عشان يشوف المكتبة الجديدة."""
     chk = [sys.executable, "-c", "import sys\nfrom PIL import features\nsys.exit(0 if features.check('raqm') else 1)"]
+    errs = []
 
     def ok():
         return subprocess.run(chk, capture_output=True).returncode == 0
 
     def run(cmd):
         try:
-            subprocess.run(cmd, capture_output=True)
-        except OSError:
-            pass
+            p = subprocess.run(cmd, capture_output=True, text=True)
+            if p.returncode != 0:
+                errs.append(" ".join(((p.stderr or "") + (p.stdout or "")).split())[-160:])
+        except OSError as e:
+            errs.append(str(e))
 
+    if ok():
+        return
+    if subprocess.run([sys.executable, "-c", "import PIL"], capture_output=True).returncode != 0:
+        run([sys.executable, "-m", "pip", "install", "-q", "--break-system-packages", "pillow"])
+        if subprocess.run([sys.executable, "-c", "import PIL"], capture_output=True).returncode != 0:
+            run([sys.executable, "-m", "pip", "install", "-q", "--user", "pillow"])
     if not ok():
-        try:
-            import PIL  # noqa: F401
-        except ImportError:
-            run([sys.executable, "-m", "pip", "install", "-q", "--break-system-packages", "pillow"])
-        if not ok():
-            run(["sudo", "-n", "apt-get", "install", "-y", "-qq", "libraqm0"])
-        if not ok():
-            raise Exception("Pillow مع raqm غير متوفر (لازم لتشكيل الحروف العربية)")
+        run(["sudo", "-n", "apt-get", "install", "-y", "-qq", "libraqm0"])
+    if not ok():
+        raise Exception("Pillow مع raqm غير متوفر (لازم لتشكيل الحروف العربية)" + (": " + errs[-1] if errs else ""))
+
+
+def ensure_deps():
+    """يستورد Pillow (لازم يكون مثبّت: السيرفر يستدعي install_deps اول ما يبدأ). يرمي استثناء لو ناقص."""
+    importlib.invalidate_caches()
+    try:
+        import site
+        site.addsitedir(site.getusersitepackages())
+    except Exception:
+        pass
     global Image, ImageDraw, ImageFont
-    from PIL import Image, ImageDraw, ImageFont  # noqa: F401
+    try:
+        from PIL import Image, ImageDraw, ImageFont, features  # noqa: F401
+    except ImportError as e:
+        raise Exception("Pillow غير متوفر: %s" % e)
+    if not features.check("raqm"):
+        raise Exception("Pillow بدون raqm (تشكيل الحروف العربية)")
 
 
 @lru_cache(maxsize=None)

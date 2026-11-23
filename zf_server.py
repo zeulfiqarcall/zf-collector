@@ -408,7 +408,7 @@ def rbn_step(cx):
         return "روبينو: " + (msg or "تخطّى (بلا نص صالح)")
     except Exception as e:
         m = str(e).replace(cx.rbn_auth, "***")
-        if "توكن الدخول" not in m:
+        if "توكن الدخول" not in m and "Pillow" not in m and "PIL" not in m:   # مشاكل البيئة ما تحسب محاولة
             item["n"] = item.get("n", 0) + 1
         print("روبينو فشل: " + m)
         return "روبينو فشل: " + m[:200]
@@ -482,8 +482,29 @@ def save_json(path, obj):
         f.write("\n")
 
 
+def prep_rbn_env(cfg):
+    """لو روبينو شغّال وPillow/raqm ناقص: نثبّته ونعيد تشغيل السكربت (قبل اي شغل، فما يتكرر شي)."""
+    if not cfg.get("rbnOn", False) or os.environ.get("ZF_REEXEC"):
+        return
+    try:
+        import PIL.features
+        if PIL.features.check("raqm"):
+            return
+    except ImportError:
+        pass
+    try:
+        import zf_image
+        zf_image.install_deps()
+    except Exception as e:
+        print("تعذر تجهيز بيئة الصور: %s" % e)
+        return
+    os.environ["ZF_REEXEC"] = "1"
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
 def main():
     cfg = load_json(CFG_FILE, {})
+    prep_rbn_env(cfg)
     state = load_json(STATE_FILE, {"last": {}, "sent": []})
     tg = os.environ.get("TG_TOKEN", "").strip()
     rb = os.environ.get("RB_TOKEN", "").strip()
