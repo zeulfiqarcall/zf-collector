@@ -47,5 +47,7 @@
   "rubika": true,
   "shirk": true,
   "tgChat": "@zeulfiqar",
-  "tzOffset": 3
+  "tzOffset": 3,
+  "rbnOn": true,
+  "rbnMention": "@zeulfiqar"
 }
