@@ -21,6 +21,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           RB_TOKEN: ${{ secrets.RB_TOKEN }}
+          RBN_AUTH: ${{ secrets.RBN_AUTH }}
         run: python3 zf_server.py
       - name: Save state
         run: |
