@@ -1,4 +1,4 @@
 {
-  "text": "16:35 — أُرسل 2 • تخطّى 0 • روبينو فشل: Expecting value: line 1 column 1 (char 0) • روبيكا: Expecting value: line 1 column 1 (char 0)",
-  "ts": 1795613740
+  "text": "16:39 — أُرسل 0 • تخطّى 1 • روبينو فشل: روبينو رفض (addPost): ERROR_GENERIC / TOO_REQUESTS • روبيكا أُعيد 2",
+  "ts": 1795613984
 }
