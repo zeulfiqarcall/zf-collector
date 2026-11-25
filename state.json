@@ -4,19 +4,23 @@
     "alibk3": 42221,
     "alomhoar": 116914,
     "naya_foriraq": 97022,
-    "sabrennewss": 232556
+    "sabrennewss": 232558
   },
   "rb_pending": [],
   "rbn_profile": "63aeddc39dc6d605e505087c",
   "rbn_queue": [
     {
-      "n": 2,
+      "n": 3,
       "t": "‏السلام عليكِ يا أمَّ العباس . . .",
       "ts": 1795578930
+    },
+    {
+      "n": 0,
+      "t": "خام برنت فوق مستوى 90 دولار للبرميل",
+      "ts": 1795579529
     }
   ],
   "sent": [
-    "bcdd5a04967a",
     "7d45f56785ba",
     "793cd0c0702d",
     "28df7ab36dbe",
@@ -315,6 +319,7 @@
     "7a110fd4eff3",
     "80c503e7b9a9",
     "f4cde4bb3096",
-    "ffc0ee320c59"
+    "ffc0ee320c59",
+    "6f3482d0d59b"
   ]
 }
