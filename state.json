@@ -4,13 +4,18 @@
     "alibk3": 42221,
     "alomhoar": 116914,
     "naya_foriraq": 97022,
-    "sabrennewss": 232555
+    "sabrennewss": 232556
   },
   "rb_pending": [],
   "rbn_profile": "63aeddc39dc6d605e505087c",
-  "rbn_queue": [],
+  "rbn_queue": [
+    {
+      "n": 1,
+      "t": "‏السلام عليكِ يا أمَّ العباس . . .",
+      "ts": 1795578930
+    }
+  ],
   "sent": [
-    "b597c491ad0e",
     "bcdd5a04967a",
     "7d45f56785ba",
     "793cd0c0702d",
@@ -309,6 +314,7 @@
     "406465344661",
     "7a110fd4eff3",
     "80c503e7b9a9",
-    "f4cde4bb3096"
+    "f4cde4bb3096",
+    "ffc0ee320c59"
   ]
 }
