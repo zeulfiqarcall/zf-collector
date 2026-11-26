@@ -5,7 +5,6 @@
 الحالة: state.json / status.json (يحفظها الـ workflow)."""
 import os, re, sys, json, time, html, hashlib, datetime
 import urllib.request, urllib.parse, urllib.error
-import zf_caption
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG_FILE = os.path.join(HERE, "config.json")
@@ -15,11 +14,6 @@ UA = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safar
 MAX_PER_CHANNEL = 10
 KEEP_HASHES = 300
 TG_GAP = 3.0
-# روبينو: صورة وحدة كل فحص (5 دقائق) من طابور الاخبار
-RBN_MAX_QUEUE = 20          # اقصى عدد اخبار تنتظر
-RBN_MAX_AGE = 3 * 3600      # الخبر الاقدم من 3 ساعات ينحذف من الطابور
-RBN_MAX_TRIES = 5
-RBN_LADDER = [(100, 98), (100, 92), (75, 95), (50, 92)]   # {نسبة الحجم %, جودة JPEG}
 
 L = r"[^\W\d_]"  # حرف (يعوض \p{L})
 DIAC = r"[\u064B-\u065F\u0670\u0640]*"
@@ -263,9 +257,9 @@ def norm_hash(s):
 
 # ------------------------------------------------------------ الفحص
 class Ctx:
-    def __init__(self, cfg, state, tg_token, rb_token, rbn_auth=""):
+    def __init__(self, cfg, state, tg_token, rb_token):
         self.cfg, self.state = cfg, state
-        self.tg, self.rb, self.rbn_auth = tg_token, rb_token, rbn_auth
+        self.tg, self.rb = tg_token, rb_token
         self.last_tg = 0.0
         self.rb_err = None
         self.notext = 0
@@ -348,72 +342,6 @@ def post_one(cx, out):
         del q[:-30]
 
 
-def rbn_enqueue(cx, out):
-    q = cx.state.setdefault("rbn_queue", [])
-    q.append({"t": out, "ts": int(time.time()), "n": 0})
-    del q[:-RBN_MAX_QUEUE]
-
-
-def rbn_publish(cx, text):
-    """كابشن (عاجل/عنوان/نص/هاشتاغات) -> ترجمة فارسي -> صورة -> نشر. يرجّع رسالة، او None لو ما فيه نص صالح."""
-    cr = zf_caption.build(text)
-    if not cr.title:
-        return None
-    fa = zf_caption.to_fa(cr, translate_fa)
-    cap = fa
-    mention = str(cx.cfg.get("rbnMention", "")).strip()
-    if mention:
-        cap += "\n\n" + mention
-    import zf_image
-    import zf_rubino
-    zf_image.ensure_deps()
-    img = zf_image.render(fa)                      # نص الصورة = اول جملة من الكابشن الفارسي
-    rb = zf_rubino.Rubino(cx.rbn_auth, cx.state)
-    thumb, last = None, None
-    for pct, q in RBN_LADDER:                      # اعلى جودة اولا، ولو فشل رفع الصورة نخفّض
-        jpg, w, h = zf_image.to_jpeg(img, pct, q)
-        if thumb is None:
-            thumb = zf_rubino.make_thumb(jpg, zf_image.Image)
-        try:
-            return rb.publish(jpg, w, h, cap, thumb)
-        except Exception as e:
-            last = e
-            if "رفع الصورة" not in str(e):
-                raise
-    raise last
-
-
-def rbn_step(cx):
-    """ينشر خبر واحد (الاقدم) من الطابور في روبينو. يرجّع نص للحالة او None."""
-    cfg = cx.cfg
-    q = cx.state.setdefault("rbn_queue", [])
-    if not cfg.get("rbnOn", False):
-        del q[:]
-        return None
-    if cfg.get("paused", False):
-        return None
-    now = time.time()
-    q[:] = [x for x in q if now - x.get("ts", now) <= RBN_MAX_AGE and x.get("n", 0) < RBN_MAX_TRIES]
-    if not q:
-        return None
-    if not cx.rbn_auth:
-        return "روبينو: عبّي RBN_AUTH في Secrets"
-    if time.time() - T0 > BUDGET - 60:
-        cx.cut = True
-        return None
-    item = q[0]
-    try:
-        msg = rbn_publish(cx, item["t"])
-        q.pop(0)
-        return "روبينو: " + (msg or "تخطّى (بلا نص صالح)")
-    except Exception as e:
-        m = str(e).replace(cx.rbn_auth, "***")
-        if "توكن الدخول" not in m and "Pillow" not in m and "PIL" not in m:   # مشاكل البيئة ما تحسب محاولة
-            item["n"] = item.get("n", 0) + 1
-        print("روبينو فشل: " + m)
-        return "روبينو فشل: " + m[:200]
-
-
 def parse_posts(page):
     starts, ids = [], []
     for m in POST_ID.finditer(page):
@@ -455,8 +383,6 @@ def poll_channel(cx, ch, paused):
         out = filter_text(cx.cfg, text)
         if out is not None and norm_hash(out) not in sent_hashes:
             post_one(cx, out)
-            if cx.cfg.get("rbnOn", False):
-                rbn_enqueue(cx, out)
             sent_hashes.append(norm_hash(out))
             del sent_hashes[:-KEEP_HASHES]
             sent += 1
@@ -482,33 +408,13 @@ def save_json(path, obj):
         f.write("\n")
 
 
-def prep_rbn_env(cfg):
-    """لو روبينو شغّال وPillow/raqm ناقص: نثبّته ونعيد تشغيل السكربت (قبل اي شغل، فما يتكرر شي)."""
-    if not cfg.get("rbnOn", False) or os.environ.get("ZF_REEXEC"):
-        return
-    try:
-        import PIL.features
-        if PIL.features.check("raqm"):
-            return
-    except ImportError:
-        pass
-    try:
-        import zf_image
-        zf_image.install_deps()
-    except Exception as e:
-        print("تعذر تجهيز بيئة الصور: %s" % e)
-        return
-    os.environ["ZF_REEXEC"] = "1"
-    os.execv(sys.executable, [sys.executable] + sys.argv)
-
-
 def main():
     cfg = load_json(CFG_FILE, {})
-    prep_rbn_env(cfg)
     state = load_json(STATE_FILE, {"last": {}, "sent": []})
+    state.pop("rbn_queue", None)            # روبينو انلغى: ننظّف بقايا الطابور من النسخة السابقة
+    state.pop("rbn_profile", None)
     tg = os.environ.get("TG_TOKEN", "").strip()
     rb = os.environ.get("RB_TOKEN", "").strip()
-    rbn = os.environ.get("RBN_AUTH", "").strip()
     paused = bool(cfg.get("paused", False))
     channels = []
     for c in cfg.get("channels", []):
@@ -532,7 +438,7 @@ def main():
         status = "ما فيه قنوات مضافة"
         sent = skipped = 0
     else:
-        cx = Ctx(cfg, state, tg, rb, rbn)
+        cx = Ctx(cfg, state, tg, rb)
         sent = skipped = 0
         err = ""
         retried = retry_rb(cx)
@@ -551,9 +457,6 @@ def main():
                     err = msg
             save_json(STATE_FILE, state)
         status = ("متوقف مؤقتا • " if paused else "") + "أُرسل %d • تخطّى %d" % (sent, skipped)
-        rbn_msg = rbn_step(cx)
-        if rbn_msg:
-            status += " • " + rbn_msg
         if cx.notext:
             status += " (منها %d بلا نص)" % cx.notext
         if cx.cut:
@@ -570,7 +473,7 @@ def main():
     save_json(STATE_FILE, state)
     # status.json: نكتبه فقط اذا صار شي، او مرّت ساعة (عشان ما نملأ الريبو بكوميتات)
     old = load_json(STATUS_FILE, {})
-    changed = sent or skipped or "خطأ" in status or "روبيكا" in status or "روبينو" in status
+    changed = sent or skipped or "خطأ" in status or "روبيكا" in status
     if changed or time.time() - float(old.get("ts", 0)) > 3600:
         save_json(STATUS_FILE, {"text": status, "ts": int(time.time())})
 
