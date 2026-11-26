@@ -1,15 +1,13 @@
 {
   "last": {
-    "alfaqaar313": 44942,
+    "alfaqaar313": 44944,
     "alibk3": 42301,
-    "alomhoar": 117008,
+    "alomhoar": 117009,
     "naya_foriraq": 97145,
     "sabrennewss": 232737
   },
   "rb_pending": [],
   "sent": [
-    "81c1399ba188",
-    "4ae231bdd9d5",
     "7cbca195d727",
     "1a26f86de4fb",
     "d579ed1956d5",
@@ -307,6 +305,8 @@
     "fe3a54fd2434",
     "8e7787b114a7",
     "17c7aa9904ab",
-    "3795ec9ff639"
+    "3795ec9ff639",
+    "bd17255ea577",
+    "6a368539090a"
   ]
 }
