@@ -1,20 +1,13 @@
 {
   "last": {
-    "alfaqaar313": 45019,
+    "alfaqaar313": 45020,
     "alibk3": 42346,
     "alomhoar": 117072,
     "naya_foriraq": 97195,
-    "sabrennewss": 232807
+    "sabrennewss": 232808
   },
-  "rb_pending": [
-    {
-      "n": 0,
-      "t": "اضطراب واسع في حركة الملاحة الجوية فوق المنطقة الشرقية بالسعودية"
-    }
-  ],
+  "rb_pending": [],
   "sent": [
-    "d9e8ce2a52ef",
-    "c447e679f5fb",
     "f517dcef015b",
     "9cb538cdef7c",
     "944440943a0b",
@@ -312,6 +305,8 @@
     "1514b7f84c7a",
     "48b8b0bd5ada",
     "1669e518a4a2",
-    "a5e5d6ad6faa"
+    "a5e5d6ad6faa",
+    "76428122fca5",
+    "88c6687e18c4"
   ]
 }
